@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile the real bundle on a tiny source fixture; no Horizon/assets required."""
+"""Compile the real bundle on a tiny streaming fixture; no Horizon/assets needed."""
 import json
 from pathlib import Path
 import subprocess
@@ -31,57 +31,76 @@ def main():
     run(['cargo', 'build', '--locked', '--offline', '-p', 'horizon-mixins-cli'], cwd=horizon.MIXINS)
     cli = horizon.MIXINS/'target/debug/horizon-mixins'
     manifests = list((root/'mixins').glob('*/horizon-mixin.toml'))
-    assert len(manifests) == 1, 'this template test expects one example bundle'
+    assert len(manifests) == 1, 'expected exactly one native bundle'
     manifest = tomllib.loads(manifests[0].read_text())
-    with tempfile.TemporaryDirectory(prefix='template-test-', dir=root/'target') as scratch:
+
+    with tempfile.TemporaryDirectory(prefix='optimizer-test-', dir=root/'target') as scratch:
         scratch = Path(scratch)
         original, stage = scratch/'original', scratch/'stage'
-        (original/'crates/horizon-client/src').mkdir(parents=True)
-        (original/'Cargo.toml').write_text('[workspace]\nmembers=["crates/horizon-client"]\nresolver="2"\n')
-        (original/'crates/horizon-client/Cargo.toml').write_text('[package]\nname="horizon-client"\nversion="0.1.0"\nedition="2024"\n')
-        (original/'crates/horizon-client/src/lib.rs').write_text('pub mod game;\n')
-        (original/'crates/horizon-client-render/src/streaming.rs').write_text('''
-pub struct Game<'a> { pub positions: &'a mut Vec<[i32;3]> }
-impl Game<'_> {
-    pub fn break_block(&mut self,pos:[i32;3])->i32 {self.positions.push(pos); 7}
+        source_dir = original/'crates/horizon-client-render/src'
+        source_dir.mkdir(parents=True)
+        (original/'Cargo.toml').write_text(
+            '[workspace]\\nmembers=["crates/horizon-client-render"]\\nresolver="2"\\n')
+        (original/'crates/horizon-client-render/Cargo.toml').write_text(
+            '[package]\\nname="horizon-client-render"\\nversion="0.1.0"\\nedition="2024"\\n')
+        (source_dir/'lib.rs').write_text('pub mod streaming;\\n')
+        (source_dir/'streaming.rs').write_text("""
+pub struct Streaming { pub center: (i32, i32), pub scan_center: (i32, i32), pub scan_age: u8 }
+impl Streaming {
+    pub fn update(&mut self) -> bool {
+        let area_changed = self.center != self.scan_center;
+        let sweep = area_changed || self.scan_age >= 8;
+        self.scan_center = self.center;
+        self.scan_age = if sweep { 0 } else { self.scan_age + 1 };
+        sweep
+    }
 }
-#[test] fn original_body_and_result_are_preserved() {
-    let mut positions=Vec::new();
-    let mut game=Game {positions:&mut positions};
-    assert_eq!(game.break_block([1,2,3]),7);
-    assert_eq!(game.break_block([-1,64,8]),7);
-    assert_eq!(positions,vec![[1,2,3],[-1,64,8]]);
+#[test] fn periodic_sweep_and_area_change_are_preserved() {
+    let mut s = Streaming { center: (0,0), scan_center: (0,0), scan_age: 16 };
+    assert!(s.update());
+    s.scan_age = 15;
+    assert!(!s.update());
+    s.center = (1,0);
+    assert!(s.update());
 }
-''')
+""")
         (original/'rust-toolchain.toml').write_bytes((root/'rust-toolchain.toml').read_bytes())
-        (original/'.horizon-revision').write_text(horizon.PIN+'\n')
+        (original/'.horizon-revision').write_text(horizon.PIN+'\\n')
         run(['cargo', 'generate-lockfile', '--offline'], cwd=original)
         before = snapshot(original)
         base = ['--workspace', str(original), '--mods', str(root/'mixins')]
-        report = json.loads(run([str(cli), 'check', *base, '--out', str(stage), '--trust-native-mods']).stdout)
+        report = json.loads(run([str(cli), 'check', *base, '--out', str(stage),
+                                 '--trust-native-mods']).stdout)
         assert report['injections'] == 1 and report['modules'] == 1
         assert '2 passed' in report['cargo_stdout']
         first = snapshot(stage)
-        second = json.loads(run([str(cli), 'check', *base, '--out', str(stage), '--trust-native-mods']).stdout)
+        second = json.loads(run([str(cli), 'check', *base, '--out', str(stage),
+                                 '--trust-native-mods']).stdout)
         assert not second['stage_changed'] and snapshot(stage) == first
         assert snapshot(original) == before
+
         plan_path = scratch/'plan.json'
         run([str(cli), 'plan', *base, '--out', str(plan_path)])
         plan = json.loads(plan_path.read_text())
         assert plan['schema'] == horizon.COMPAT['mixin_schema']
         assert plan['injections'][0]['mod_id'] == manifest['mod']['id']
         audit(original, stage, plan_path)
-        (original/'.horizon-revision').write_text('incompatible\n')
-        bad = subprocess.run([str(cli), 'apply', *base, '--out', str(stage)], capture_output=True, text=True)
+
+        (original/'.horizon-revision').write_text('incompatible\\n')
+        bad = subprocess.run([str(cli), 'apply', *base, '--out', str(stage)],
+                             capture_output=True, text=True)
         assert bad.returncode and json.loads(bad.stderr)['code'] == 'E_REVISION'
         assert snapshot(stage) == first
-        (original/'.horizon-revision').write_text(horizon.PIN+'\n')
-        source = original/'crates/horizon-client/src/game.rs'
-        source.write_text(source.read_text().replace('update', 'renamed_update'))
-        bad = subprocess.run([str(cli), 'apply', *base, '--out', str(stage)], capture_output=True, text=True)
+
+        (original/'.horizon-revision').write_text(horizon.PIN+'\\n')
+        source = source_dir/'streaming.rs'
+        source.write_text(source.read_text().replace('pub fn update', 'pub fn renamed_update'))
+        bad = subprocess.run([str(cli, 'apply', *base, '--out', str(stage)],
+                             capture_output=True, text=True)
         assert bad.returncode and json.loads(bad.stderr)['code'] == 'E_TARGET_NOT_FOUND'
         assert snapshot(stage) == first
-    print(json.dumps({'status': 'ok', 'compiled_runtime_and_original_body': True,
+
+    print(json.dumps({'status': 'ok', 'compiled_runtime_and_streaming_fixture': True,
                       'only_planned_asts_changed': True, 'deterministic_bytes_and_mtimes': True,
                       'incompatible_revision_and_target_rejected': True}, indent=2))
 
