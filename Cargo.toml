@@ -1,14 +1,14 @@
 [package]
-name = "horizon-example-mod"
+name = "horizon-optimizer"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.95"
 license = "MIT"
-description = "A minimal native Horizon Mixins mod"
+description = "Chunk-streaming optimization for Horizon"
 
 [lib]
-# This exact source is also injected as a same-crate module by horizon-mixins.
-path = "mixins/example_mod/runtime.rs"
+# Shared by the standalone tests and the injected Horizon module.
+path = "mixins/horizon_optimizer/runtime.rs"
 
 [workspace]
 members = ["tools/audit"]
