@@ -95,7 +95,7 @@ impl Streaming {
         (original/'.horizon-revision').write_text(horizon.PIN+'\\n')
         source = source_dir/'streaming.rs'
         source.write_text(source.read_text().replace('pub fn update', 'pub fn renamed_update'))
-        bad = subprocess.run([str(cli, 'apply', *base, '--out', str(stage)],
+        bad = subprocess.run([str(cli), 'apply', *base, '--out', str(stage)],
                              capture_output=True, text=True)
         assert bad.returncode and json.loads(bad.stderr)['code'] == 'E_TARGET_NOT_FOUND'
         assert snapshot(stage) == first
