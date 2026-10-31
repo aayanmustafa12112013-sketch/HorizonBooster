@@ -40,10 +40,10 @@ def main():
         source_dir = original/'crates/horizon-client-render/src'
         source_dir.mkdir(parents=True)
         (original/'Cargo.toml').write_text(
-            '[workspace]\\nmembers=["crates/horizon-client-render"]\\nresolver="2"\\n')
+            '[workspace]\nmembers=["crates/horizon-client-render"]\nresolver="2"\n')
         (original/'crates/horizon-client-render/Cargo.toml').write_text(
-            '[package]\\nname="horizon-client-render"\\nversion="0.1.0"\\nedition="2024"\\n')
-        (source_dir/'lib.rs').write_text('pub mod streaming;\\n')
+            '[package]\nname="horizon-client-render"\nversion="0.1.0"\nedition="2024"\n')
+        (source_dir/'lib.rs').write_text('pub mod streaming;\n')
         (source_dir/'streaming.rs').write_text("""
 pub struct Streaming { pub center: (i32, i32), pub scan_center: (i32, i32), pub scan_age: u8 }
 impl Streaming {
@@ -65,7 +65,7 @@ impl Streaming {
 }
 """)
         (original/'rust-toolchain.toml').write_bytes((root/'rust-toolchain.toml').read_bytes())
-        (original/'.horizon-revision').write_text(horizon.PIN+'\\n')
+        (original/'.horizon-revision').write_text(horizon.PIN+'\n')
         run(['cargo', 'generate-lockfile', '--offline'], cwd=original)
         before = snapshot(original)
         base = ['--workspace', str(original), '--mods', str(root/'mixins')]
@@ -86,13 +86,13 @@ impl Streaming {
         assert plan['injections'][0]['mod_id'] == manifest['mod']['id']
         audit(original, stage, plan_path)
 
-        (original/'.horizon-revision').write_text('incompatible\\n')
+        (original/'.horizon-revision').write_text('incompatible\n')
         bad = subprocess.run([str(cli), 'apply', *base, '--out', str(stage)],
                              capture_output=True, text=True)
         assert bad.returncode and json.loads(bad.stderr)['code'] == 'E_REVISION'
         assert snapshot(stage) == first
 
-        (original/'.horizon-revision').write_text(horizon.PIN+'\\n')
+        (original/'.horizon-revision').write_text(horizon.PIN+'\n')
         source = source_dir/'streaming.rs'
         source.write_text(source.read_text().replace('pub fn update', 'pub fn renamed_update'))
         bad = subprocess.run([str(cli), 'apply', *base, '--out', str(stage)],
