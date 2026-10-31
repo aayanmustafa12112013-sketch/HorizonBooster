@@ -1,0 +1,23 @@
+[mod]
+id = "horizon_optimizer"
+version = "0.1.0"
+priority = 100
+
+[compatibility]
+horizon_revision = "ba6344a59cb9e755b730dcf02285fc0d33b97d3c"
+
+[[module]]
+id = "runtime"
+file = "crates/horizon-client-render/src/streaming.rs"
+name = "horizon_optimizer"
+source = "runtime.rs"
+
+[[injection]]
+id = "less-frequent-range-sweep"
+kind = "MODIFY_CONSTANT"
+target = "horizon_client_render::streaming::Streaming::update"
+selector = "8"
+require = 1
+ordinal = 0
+helper = "sweep.rs"
+bindings = [{ name = "value", ty = "u8", value = "$value" }]
