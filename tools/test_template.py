@@ -40,7 +40,7 @@ def main():
         (original/'Cargo.toml').write_text('[workspace]\nmembers=["crates/horizon-client"]\nresolver="2"\n')
         (original/'crates/horizon-client/Cargo.toml').write_text('[package]\nname="horizon-client"\nversion="0.1.0"\nedition="2024"\n')
         (original/'crates/horizon-client/src/lib.rs').write_text('pub mod game;\n')
-        (original/'crates/horizon-client/src/game.rs').write_text('''
+        (original/'crates/horizon-client-render/src/streaming.rs').write_text('''
 pub struct Game<'a> { pub positions: &'a mut Vec<[i32;3]> }
 impl Game<'_> {
     pub fn break_block(&mut self,pos:[i32;3])->i32 {self.positions.push(pos); 7}
@@ -77,7 +77,7 @@ impl Game<'_> {
         assert snapshot(stage) == first
         (original/'.horizon-revision').write_text(horizon.PIN+'\n')
         source = original/'crates/horizon-client/src/game.rs'
-        source.write_text(source.read_text().replace('break_block', 'renamed_break_block'))
+        source.write_text(source.read_text().replace('update', 'renamed_update'))
         bad = subprocess.run([str(cli), 'apply', *base, '--out', str(stage)], capture_output=True, text=True)
         assert bad.returncode and json.loads(bad.stderr)['code'] == 'E_TARGET_NOT_FOUND'
         assert snapshot(stage) == first
